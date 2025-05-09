@@ -29,7 +29,7 @@ setup(
      packages=['croz',"croz.src"],
      package_dir={'croz': 'croz/',"croz.src":"croz/src"},
 
-     install_requires=["torch","numpy", "mrcfile","pyuul","matplotlib",'madrax @ git+https://bitbucket.org/grogdrinker/madrax/'],
+     install_requires=["torch","numpy","biopython", "mrcfile","pyuul","matplotlib",'madrax @ git+https://bitbucket.org/grogdrinker/madrax/'],
 
      classifiers=[
 
