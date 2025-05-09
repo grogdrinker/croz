@@ -23,91 +23,32 @@ If you use Croz in your research, please consider citing:
 
 ## Installation
 You can install Croz with pip building it locally.
-Package installation should only take a few minutes with any of these methods (pip, source).
 
-### Installing Xenusia with pip:
+To install Croz locally from source:
 
-We suggest to create a local conda environment where to install xenusia. it can be done with:
+1. Navigate to the directory of croz. For example:
+   ```bash
+    cd croz
+2. Install the package using pip:
+   ```bash
+    pip install .
+3. you can test the functions of Croz using the script "croz/run_testing.py". It is basically a tutorial
 
-```sh
-conda create -n xenusia
-```
-and activated with
+# Usage
 
-```sh
-conda activate xenusia
-```
+## Using Croz into a python script
 
-or
-
-```sh
-source activate xenusia
-```
-
-We also suggest to install pytorch separately following the instructions from https://pytorch.org/get-started/locally/
-
-```sh
-pip install xenusia
-```
-
-The procedure will install xenusia in your computer.
-
-### Installing Xenusia from source:
-
-If you want to install Xenusia from this repository, you need to install the dependencies first.
-First, install [PyTorch](https://pytorch.org/get-started/locally/) separately following the instructions from https://pytorch.org/get-started/locally/.
-
-Then install the other required libraries:
-
-```sh
-pip install numpy scikit-learn requests
-```
-
-Finally, you can clone the repository with the following command:
-
-```sh
-git clone https://github.com/grogdrinker/xenusia/
-```
-
-## Usage
-
-the pip installation will install a script called xenusia_standalone that is directly usable from command line (at least on linux and mac. Most probably on windows as well if you use a conda environemnt).
-
-### Using the standalone
-The script can take a fasta file or a sequence as input and provide a prediction as output
-
-```sh
-xenusia_standalone AWESAMEPRTEINSEQENCEASINPT
-```
-
-or, for multiple sequences, do
-
-```sh
-xenusia_standalone fastaFile.fasta
-```
-
-To write the output in a file, do
-
-```sh
-xenusia_standalone fastaFile.fasta -o outputFilePath
-```
-
-### Using Xenusia into a python script
-
-Xenusia can be imported as a python module
+Croz can be imported as a python module
 
 ```python
-from xenusia.run_prediction import predict
-proteinSeq1 = "ASDASDASDASDASDASDDDDASD"
-proteinSeq2 = "ASDADDDDDDDDDDDDDASDASDDDDASD"
-proteinSeq2 = "ASDADFFFFFFFFFDDDDDDDDFFFFFFFFFASD"
-inputSequences = {"ID1":proteinSeq1,"ID2":proteinSeq2,"ID3":proteinSeq3}
+    from croz.croz import run_optimization
+    test_pdb = "your favouritePDBmodel.pdb"
+    test_map = "the_respectiveCryoEM_mapFile.mrc"
 
-xenusia_output = predict(inputSequences) # which is a dict containig the predictions
-
+    score = run_optimization(test_pdb,test_map,verbose=True)
 ```
-
+the score  is a Pearson's correlation coefficient. The higher the better
 
 ## Help
 
-For bug reports, features addition and technical questions please contact gabriele.orlando@kuleuven.be
+For bug reports, features addition and technical questions please contact gabriele.orlando@umontpellier.fr
