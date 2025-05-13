@@ -1,14 +1,8 @@
-
 import mrcfile
 
 device = "cuda"#torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from pyuul import VolumeMaker # the main PyUUL module
 from pyuul import utils as pyuulUtils# the PyUUL utility module
-#from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('TkAgg')  # Or 'TkAgg' if Qt is unavailable
-import numpy as np
 
 from croz.src.pyuulPatch import vm
 from croz.src.initial_conformation import get_initial_alignment
@@ -112,6 +106,9 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
                 print("\tloss step",step,round(float(loss.data),5),"rotations",round(float(rotation.cpu().abs().mean().data),5),"translation",round(float(translation.cpu().abs().mean().data),5),"torsion_rotation",round(float(torsion_rotation.cpu().abs().mean().data),5))
         loss.backward()
         optimizer.step()
+    if best_score == 0.0:
+        print("OPTIMIZATION FAILED. I cannot fit the PDB model in the electron density")
+        return None,None
     best_points*=size_side_voxel
     rotated_points = best_points
     best_score = -best_score
