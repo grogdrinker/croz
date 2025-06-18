@@ -30,14 +30,17 @@ class LossPearsons:
 
 		return -cost
 
-def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1000, lr=0.0001,atom_names=None,out_pdb=False,verbose=False,rotate_side_chains=False):
+def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=100, lr=0.0001,atom_names=None,out_pdb=False,verbose=False,rotateType=False):
     img2 = min_max_scale(img2)
-
+    if verbose:
+        print("starting optimization for ",num_steps," steps and rotation type ",rotateType)
+    if rotateType!=False and rotateType!= "backbone" and rotateType!= "sidechain":
+        raise ValueError("rotateType defines the type of torsion angles rotated. it can only be False, for no rotations, 'sidechain' for side chain only and 'backbone' for backbone and sidechain optimization")
     # Initial translation parameters
     translation = torch.zeros(3, requires_grad=True, device=device)
     rotation = torch.zeros(3, requires_grad=True, device=device)
 
-    if rotate_side_chains:
+    if rotateType == "backbone" or rotateType == "sidechain":
         from madrax.mutate import rotator
         from madrax import  dataStructures
         from madrax.sources import hashings
@@ -50,11 +53,14 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
         maxchain = info_tensors[1][:, hashings.atom_description_hash["chain"]].max() + 1
         maxseq = info_tensors[1][:, hashings.atom_description_hash["resnum"]].max() + 1
 
-        torsion_rotation = torch.zeros((1, maxchain, maxseq, 1, 8), device=device, dtype=torch.float,requires_grad=True)
+        sc_rotation = torch.zeros((1, maxchain, maxseq, 1, 5), device=device, dtype=torch.float,requires_grad=True)
+        backbone_rotation = torch.zeros((1, maxchain, maxseq, 1, 3), device=device, dtype=torch.float,requires_grad=True)
+
         #optimizer = torch.optim.Adam([torsion_rotation], lr=lr)
 
         optimizer = torch.optim.Adam([
-            {'params': torsion_rotation, "lr": 0.1},
+            {'params': sc_rotation, "lr": 0.1},
+            {'params': backbone_rotation, "lr": 0.0001},
             {'params': translation, 'lr': lr},
             {'params': rotation, 'lr': lr}
         ], amsgrad=True, eps=0.1)
@@ -80,9 +86,17 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
 
         rotated_points = ((coords-center_of_mass).squeeze(0) @ R.T + center_of_mass + translation).unsqueeze(0)
 
-        if rotate_side_chains:
+        if rotateType=="backbone":
+            torsion_rotation = torch.cat([backbone_rotation,sc_rotation],dim=-1)
+            torsion_angles = torch.sin(torsion_rotation) * math.pi
+            final_rot = rotator_obj(rotated_points, info_tensors, torsion_angles, backbone_rotation=True)
+
+        elif rotateType=="sidechain":
+            backbone_rotation = torch.zeros((1, maxchain, maxseq, 1, 3), device=device, dtype=torch.float,requires_grad=True)
+            torsion_rotation = torch.cat([backbone_rotation,sc_rotation],dim=-1)
             torsion_angles = torch.sin(torsion_rotation) * math.pi
             final_rot = rotator_obj(rotated_points, info_tensors, torsion_angles, backbone_rotation=False)
+
         else:
             final_rot = rotated_points
 
@@ -98,11 +112,11 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
             best_score = float(loss.cpu().data)
             best_rotation = rotation.cpu().data.tolist()
             best_translation = translation.cpu().data.tolist()
-        if not rotate_side_chains and verbose:
-            if step % 50 == 0:
+        if not rotateType and verbose:
+            if step % 1 == 0:
                 print("\tloss step",step,round(float(loss.data),5),"rotations",round(float(rotation.cpu().abs().mean().data),5),"translation",round(float(translation.cpu().abs().mean().data),5))
         else:
-            if step % 50 == 0 and verbose:
+            if step % 1 == 0 and verbose:
                 print("\tloss step",step,round(float(loss.data),5),"rotations",round(float(rotation.cpu().abs().mean().data),5),"translation",round(float(translation.cpu().abs().mean().data),5),"torsion_rotation",round(float(torsion_rotation.cpu().abs().mean().data),5))
         loss.backward()
         optimizer.step()
@@ -114,6 +128,7 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
     best_score = -best_score
     if verbose:
         print("best score",best_score)
+
     if out_pdb:
         writePDB(rotated_points,atom_names,out_pdb)
 
@@ -178,7 +193,7 @@ def get_electrondensity(fil):
 
     return voxel,voxel_size
 
-def run_optimization(pdb_file,electrondensity_file,rotate_side_chains=False,out_pdb=False,device="auto",num_optimization_steps=1000,verbose=False,lr=0.0001):
+def run_optimization(pdb_file,electrondensity_file,rotateType=False,out_pdb=False,device="auto",num_optimization_steps=1000,verbose=False,lr=0.0001):
     electrondensity, voxel_size = get_electrondensity(electrondensity_file)
     coords, atname = pyuulUtils.parsePDB(pdb_file)
 
@@ -189,5 +204,5 @@ def run_optimization(pdb_file,electrondensity_file,rotate_side_chains=False,out_
     radius = pyuulUtils.atomlistToRadius(atname).to(device)
     coords = coords.to(device)
 
-    score, new_coords = optimizeCryoEM(coords, atoms_channel, radius, electrondensity.to(device),size_side_voxel=voxel_size, atom_names=atname, out_pdb=out_pdb, num_steps=num_optimization_steps,rotate_side_chains=rotate_side_chains,verbose=verbose,lr=lr)
+    score, new_coords = optimizeCryoEM(coords, atoms_channel, radius, electrondensity.to(device),size_side_voxel=voxel_size, atom_names=atname, out_pdb=out_pdb, num_steps=num_optimization_steps,rotateType=rotateType,verbose=verbose,lr=lr)
     return score
