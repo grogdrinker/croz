@@ -108,7 +108,7 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
 
         loss = loss_fn(rotated_volume[mask].view(-1) , img2[mask].view(-1)) #sinkhorn(rotated_points, img2)[0]
         if float(loss.cpu().data)<best_score:
-            best_points = rotated_points
+            best_points = final_rot
             best_score = float(loss.cpu().data)
             best_rotation = rotation.cpu().data.tolist()
             best_translation = translation.cpu().data.tolist()
