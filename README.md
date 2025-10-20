@@ -15,12 +15,6 @@ Croz uses pyuul to compare the expected and experimental occupancy of the protei
 
 Croz can move the model as a whole, but it also includes an option to rotate side chain positions.
 
-## What else should Rob know?
-There is a hidden option to move the backbone as well, but it is currently disabled in the user interface because I never managed to get good results with it. Let me know if you want me to activate it.
-
-## citing (in case we write a paper about this. To not forget)
-If you use Croz in your research, please consider citing:
-
 ## Installation
 You can install Croz with pip building it locally.
 
@@ -47,7 +41,7 @@ Croz can be imported as a python module
 
     score = run_optimization(test_pdb,test_map,verbose=True)
 ```
-the score  is a Pearson's correlation coefficient. The higher the better
+the score  is a Pearson's correlation coefficient. The higher the better. Execution time should be in the order of minutes.
 
 ## Help
 
