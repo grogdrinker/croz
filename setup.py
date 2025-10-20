@@ -30,7 +30,7 @@ setup(
      package_dir={'croz': 'croz/',"croz.src":"croz/src"},
 
      install_requires=["torch","numpy","biopython", "mrcfile","pyuul",'madrax @ git+https://bitbucket.org/grogdrinker/madrax/'],
-
+     python_requires="<=3.11",
      classifiers=[
 
          "Programming Language :: Python :: 3",

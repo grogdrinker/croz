@@ -12,6 +12,8 @@ function="gaussian"
 
 from croz.src.utils import get_rotation_matrix,min_max_scale,writePDB
 
+from madrax.ForceField import ForceField # the main MadraX module
+from madrax import utils,dataStructures # the MadraX utility module
 
 import torch,math
 
@@ -30,7 +32,7 @@ class LossPearsons:
 
 		return -cost
 
-def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=100, lr=0.0001,atom_names=None,out_pdb=False,verbose=False,rotateType=False):
+def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=100, lr=0.0001,atom_names=None,out_pdb=False,verbose=False,rotateType=False, use_madrax=False):
     img2 = min_max_scale(img2)
     if verbose:
         print("starting optimization for ",num_steps," steps and rotation type ",rotateType)
@@ -40,6 +42,7 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
     translation = torch.zeros(3, requires_grad=True, device=device)
     rotation = torch.zeros(3, requires_grad=True, device=device)
 
+    forceField_Obj = ForceField(device=device)
     if rotateType == "backbone" or rotateType == "sidechain":
         from madrax.mutate import rotator
         from madrax import  dataStructures
@@ -50,15 +53,16 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
         atnames = [[i+"_0_0" for i in atom_names[0]]]
         info_tensors = dataStructures.create_info_tensors(atnames, device=device)
 
+
+
         maxchain = info_tensors[1][:, hashings.atom_description_hash["chain"]].max() + 1
         maxseq = info_tensors[1][:, hashings.atom_description_hash["resnum"]].max() + 1
 
         sc_rotation = torch.zeros((1, maxchain, maxseq, 1, 5), device=device, dtype=torch.float,requires_grad=True)
         backbone_rotation = torch.zeros((1, maxchain, maxseq, 1, 3), device=device, dtype=torch.float,requires_grad=True)
 
-        #optimizer = torch.optim.Adam([torsion_rotation], lr=lr)
-
-        optimizer = torch.optim.Adam([
+        optimizer =torch.optim.Adam(
+            [
             {'params': sc_rotation, "lr": 0.1},
             {'params': backbone_rotation, "lr": 0.0001},
             {'params': translation, 'lr': lr},
@@ -78,6 +82,9 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
 
     loss_fn = LossPearsons()
     best_score = 0.0
+
+    initial_energy = forceField_Obj(coords.to(device), info_tensors).sum().data
+
     for step in range(num_steps):
 
         optimizer.zero_grad()
@@ -105,21 +112,33 @@ def optimizeCryoEM(coords,atoms_channel,radius, img2,size_side_voxel,num_steps=1
 
         mask = rotated_volume>0.001
         #loss = -torch.mean(rotated_volume[mask] * img2[mask]) #sinkhorn(rotated_points, img2)[0]
+        if use_madrax:
+            madrax_energy = (forceField_Obj(rotated_points.to(device), info_tensors).sum() - initial_energy)
+            loss = madrax_energy + loss_fn(rotated_volume[mask].view(-1) , img2[mask].view(-1))
+        else:
+            loss = loss_fn(rotated_volume[mask].view(-1), img2[mask].view(-1))
 
-        loss = loss_fn(rotated_volume[mask].view(-1) , img2[mask].view(-1)) #sinkhorn(rotated_points, img2)[0]
         if float(loss.cpu().data)<best_score:
             best_points = final_rot
             best_score = float(loss.cpu().data)
             best_rotation = rotation.cpu().data.tolist()
             best_translation = translation.cpu().data.tolist()
+
         if not rotateType and verbose:
             if step % 1 == 0:
+
                 print("\tloss step",step,round(float(loss.data),5),"rotations",round(float(rotation.cpu().abs().mean().data),5),"translation",round(float(translation.cpu().abs().mean().data),5))
+                if use_madrax:
+                    print("madrax_energy ratio:", float(madrax_energy.data))
         else:
             if step % 1 == 0 and verbose:
                 print("\tloss step",step,round(float(loss.data),5),"rotations",round(float(rotation.cpu().abs().mean().data),5),"translation",round(float(translation.cpu().abs().mean().data),5),"torsion_rotation",round(float(torsion_rotation.cpu().abs().mean().data),5))
+                if use_madrax:
+                    print("madrax_energy ratio:", float(madrax_energy.data))
+
         loss.backward()
         optimizer.step()
+
     if best_score == 0.0:
         print("OPTIMIZATION FAILED. I cannot fit the PDB model in the electron density")
         return None,None
@@ -193,7 +212,7 @@ def get_electrondensity(fil):
 
     return voxel,voxel_size
 
-def run_optimization(pdb_file,electrondensity_file,rotateType=False,out_pdb=False,device="auto",num_optimization_steps=1000,verbose=False,lr=0.0001):
+def run_optimization(pdb_file,electrondensity_file,rotateType=False,out_pdb=False,device="auto",num_optimization_steps=1000,verbose=False,lr=0.0001,use_madrax=False):
     electrondensity, voxel_size = get_electrondensity(electrondensity_file)
     coords, atname = pyuulUtils.parsePDB(pdb_file)
 
@@ -204,5 +223,5 @@ def run_optimization(pdb_file,electrondensity_file,rotateType=False,out_pdb=Fals
     radius = pyuulUtils.atomlistToRadius(atname).to(device)
     coords = coords.to(device)
 
-    score, new_coords = optimizeCryoEM(coords, atoms_channel, radius, electrondensity.to(device),size_side_voxel=voxel_size, atom_names=atname, out_pdb=out_pdb, num_steps=num_optimization_steps,rotateType=rotateType,verbose=verbose,lr=lr)
+    score, new_coords = optimizeCryoEM(coords, atoms_channel, radius, electrondensity.to(device),size_side_voxel=voxel_size, atom_names=atname, out_pdb=out_pdb, num_steps=num_optimization_steps,rotateType=rotateType,verbose=verbose,lr=lr,use_madrax=use_madrax)
     return score
